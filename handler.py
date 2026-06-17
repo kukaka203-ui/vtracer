@@ -45,7 +45,7 @@ def handler(event):
         return {
             "success": True,
             "format": "svg",
-            "svg_base64": svg_base64
+            "svg_base64": svg_base64,
         }
 
 
