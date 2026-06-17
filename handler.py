@@ -1,52 +1,55 @@
 import base64
 import os
-import subprocess
 import tempfile
-
+import subprocess
 import requests
-import runpod
-
 
 def handler(event):
-    inp = event.get("input", {})
-    image_url = inp.get("image_url")
-
-    if not image_url:
-        return {"success": False, "error": "Missing input.image_url"}
+    inp = event["input"]
 
     with tempfile.TemporaryDirectory() as tmp:
+
         input_path = os.path.join(tmp, "input.png")
         output_path = os.path.join(tmp, "output.svg")
 
-        r = requests.get(image_url, timeout=120)
-        r.raise_for_status()
+        if "image_base64" in inp:
 
-        with open(input_path, "wb") as f:
-            f.write(r.content)
+            with open(input_path, "wb") as f:
+                f.write(base64.b64decode(inp["image_base64"]))
 
-        cmd = [
+        elif "image_url" in inp:
+
+            headers = {
+                "User-Agent": "Mozilla/5.0"
+            }
+
+            r = requests.get(
+                inp["image_url"],
+                headers=headers,
+                timeout=120
+            )
+
+            r.raise_for_status()
+
+            with open(input_path, "wb") as f:
+                f.write(r.content)
+
+        else:
+            return {
+                "success": False,
+                "error": "Missing image_base64 or image_url"
+            }
+
+        subprocess.run([
             "vtracer",
             "--input", input_path,
-            "--output", output_path,
-            "--colormode", inp.get("colormode", "binary"),
-            "--mode", inp.get("mode", "spline"),
-            "--filter_speckle", str(inp.get("filter_speckle", 8)),
-            "--color_precision", str(inp.get("color_precision", 6)),
-            "--corner_threshold", str(inp.get("corner_threshold", 60)),
-            "--segment_length", str(inp.get("segment_length", 4)),
-            "--splice_threshold", str(inp.get("splice_threshold", 45)),
-        ]
-
-        subprocess.run(cmd, check=True)
+            "--output", output_path
+        ], check=True)
 
         with open(output_path, "rb") as f:
-            svg_base64 = base64.b64encode(f.read()).decode("utf-8")
+            svg = f.read().decode("utf8")
 
         return {
             "success": True,
-            "format": "svg",
-            "svg_base64": svg_base64,
+            "svg": svg
         }
-
-
-runpod.serverless.start({"handler": handler})
